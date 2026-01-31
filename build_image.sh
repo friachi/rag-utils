@@ -1,3 +1,5 @@
+echo "MAKE SURE to comment HF_ROOT used for local dev in classifier.py"
+
 # Build
 docker buildx build --platform linux/amd64 -t falriachi/rag-utils:amd64 --load --progress=plain .
 

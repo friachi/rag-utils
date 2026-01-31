@@ -10,9 +10,17 @@ from transformers import pipeline
 from transformers.pipelines.base import Pipeline
 
 # ---- HF / Transformers offline + cache configuration ----
-os.environ.setdefault("HF_HOME", "/opt/hf")
-os.environ.setdefault("HF_HUB_CACHE", "/opt/hf/hub")
-os.environ.setdefault("TRANSFORMERS_CACHE", "/opt/hf/transformers")
+HF_ROOT = os.getenv("HF_ROOT", "/opt/hf")  
+HF_ROOT = os.getenv("HF_ROOT", "/Users/fahed/.cache/huggingface")  # override in macOS dev, and make sure to set this env var to local dev cache path. !!!!! REMOVE before building container.
+
+os.environ.setdefault("HF_HOME", HF_ROOT)
+os.environ.setdefault("HF_HUB_CACHE", os.path.join(HF_ROOT, "hub"))
+os.environ.setdefault("TRANSFORMERS_CACHE", os.path.join(HF_ROOT, "transformers"))
+
+# force offline in runtime containers; in dev you can override these too if needed
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
@@ -51,13 +59,15 @@ class ClassifyResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Load the zero-shot pipeline once, reuse for all requests.
+    Load the zero-shot pipeline once, reuse for all requests. make it explicit so you never accidentally hit the network (i.e rely on cache for models)
     """
     try:
         clf: Pipeline = pipeline(
             "zero-shot-classification",
             model=DEFAULT_MODEL_ID,
             device=-1,  # CPU
+            model_kwargs={"local_files_only": True},
+            tokenizer_kwargs={"local_files_only": True},
         )
     except Exception as e:
         raise RuntimeError(f"Failed to load zero-shot pipeline for {DEFAULT_MODEL_ID}: {e}") from e

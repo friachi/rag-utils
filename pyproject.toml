@@ -5,7 +5,12 @@ description = "A set of utilities to help in building advanced RAG system."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "torch==2.10.0+cpu",
+    # Apple Silicon Mac (arm64): OK to use modern torch
+    "torch==2.10.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # Intel Mac (x86_64): pin to the last wheel-supported series
+    "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # Linux: CPU-only build from PyTorch CPU index
+    "torch==2.10.0+cpu; sys_platform == 'linux'",
     "huggingface-hub",
     "anyio>=4.12.1",
     "fastapi>=0.128.0",
@@ -16,4 +21,26 @@ dependencies = [
     "python-multipart>=0.0.22",
     "transformers>=4.57.6",
     "uvicorn[standard]>=0.40.0",
+    "langchain-text-splitters>=1.1.0",
+    "numpy<2",
+]
+
+# ---- uv: add the PyTorch CPU index, but only use it when explicitly selected ----
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+# Select the PyTorch CPU index *only for Linux* (macOS stays on PyPI)
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
+# restrict environments uv resolves for
+[tool.uv]
+environments = [
+  "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]

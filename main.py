@@ -50,6 +50,17 @@ from utils.classifier import (
     ClassifyResponse
 )
 
+# chunker
+
+from utils.chunker import ( 
+    Chunk, 
+    chunk_schema_markdown_text,
+    ChunkRequest,
+    ChunkResponse,
+    ChunkOut
+
+)
+
 HF_CACHE_DIR = os.getenv("HF_HUB_CACHE", "/opt/hf/hub")
 DEFAULT_MODEL_ID = os.getenv("HF_MODEL_ID", DEFAULT_MODEL_ID)  # keep your utils default, but allow env override
 
@@ -280,7 +291,51 @@ async def classify(req: ClassifyRequest, request: Request) -> ClassifyResponse:
         # sequence=sequence,
     )
 
+###############################
+########## Chunker ############
+###############################
 
+
+
+@app.post("/chunk", response_model=ChunkResponse)
+def chunk_endpoint(req: ChunkRequest) -> ChunkResponse:
+    chunks: List[Chunk] = chunk_schema_markdown_text(
+        req.markdown,
+        max_header_level=req.max_header_level,
+        strip_headers=req.strip_headers,
+        max_chars=req.max_chars,
+        recursive_chunk_size=req.recursive_chunk_size,
+        recursive_overlap=req.recursive_overlap,
+        recursive_separators=req.recursive_separators,
+        include_path_in_text=req.include_path_in_text,
+        path_line_prefix=req.path_line_prefix,
+        auto_min_chunk_chars=req.auto_min_chunk_chars,
+        auto_target_chunk_chars=req.auto_target_chunk_chars,
+        source_id=req.source_id,
+    )
+
+    # Deterministic: chosen level is written by the core into every chunk's metadata.
+    # If there are no chunks (empty markdown), fall back to request (or 1 for auto).
+    if chunks:
+        chosen = int(chunks[0].metadata["chosen_max_header_level"])
+    else:
+        chosen = req.max_header_level if req.max_header_level != 0 else 1
+
+    return ChunkResponse(
+        chosen_max_header_level=chosen,
+        chunks=[ChunkOut(text=c.text, metadata=c.metadata) for c in chunks],
+    )
 
 # Run with:
 #   uvicorn main:app --host 0.0.0.0 --port 8181
+
+
+
+# If on dev macOS, the for one time, models cache folder need to be created and models downloaded
+
+## create folders ##
+# sudo mkdir -p /opt/hf/hub /opt/hf/transformers
+# sudo chown -R "$USER" /opt/hf
+
+## download & cache models ##
+# uv run python -c "import os; from transformers import AutoTokenizer, AutoModelForSequenceClassification; m='facebook/bart-large-mnli'; AutoTokenizer.from_pretrained(m); AutoModelForSequenceClassification.from_pretrained(m); print('DONE')"
